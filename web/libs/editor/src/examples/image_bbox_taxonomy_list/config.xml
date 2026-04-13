@@ -1,0 +1,37 @@
+<View style="display: flex; align-items: flex-start; gap: 16px;">
+  <View style="flex: 1;">
+    <Image name="image" value="$image" zoom="true" zoomControl="true" scrollZoom="true"/>
+  </View>
+
+  <View style="min-width: 260px; max-width: 260px; position: sticky; top: 0;">
+    <RectangleLabels name="bbox" toName="image">
+      <Label value="Product" background="#0070f3"/>
+    </RectangleLabels>
+    <Header value="SKU" />
+    <Taxonomy name="sku" toName="image" perRegion="true" required="true" listMode="true" placeholder="Search SKU...">
+      <Choice value="Beverage">
+        <Choice value="Juice" />
+        <Choice value="Spring Water 1.5 liter" />
+        <Choice value="San Pellegrino 6-pack" />
+        <Choice value="Cold Brew Coffee" />
+        <Choice value="Organic Apple Juice Beverage" />
+        <Choice value="Peppermint Herbal Tea" />
+        <Choice value="Organic Lemonade" />
+      </Choice>
+      <Choice value="Dairy">
+        <Choice value="Milk" />
+        <Choice value="Oat-Milk" />
+        <Choice value="Yoghurt" />
+        <Choice value="Sour-Cream" />
+      </Choice>
+      <Choice value="Produce">
+        <Choice value="Apple" />
+        <Choice value="Banana" />
+        <Choice value="Tomato" />
+        <Choice value="Cucumber" />
+        <Choice value="Carrots" />
+        <Choice value="Onion" />
+      </Choice>
+    </Taxonomy>
+  </View>
+</View>
