@@ -5,6 +5,18 @@
 [Website](https://labelstud.io/) • [Docs](https://labelstud.io/guide/) • [Join Slack Community <img src="https://app.heartex.ai/docs/images/slack-mini.png" width="18px"/>](https://slack.labelstud.io/?source=github-1)
 
 
+> **Perceive / Trader Joe's project note:** this fork is used as the annotation UI for the Trader Joe's
+> product-detection pipeline, together with a customized RF-DETR pre-annotation backend
+> ([`RFDETR-ML-Backend`](https://github.com/ab-shetty/RFDETR-ML-Backend)). The project-specific piece
+> here is `scripts/setup_grocery_project.sh` (idempotently creates/finds the project, local-files
+> import/export storages, and ML backend registration — see `scripts/grocery_label_config.xml` for the
+> labeling config). **Don't run this repo standalone for that project** — use
+> [`tj-labeling-ops`](https://github.com/ab-shetty/tj-labeling-ops), which orchestrates this repo, the
+> ML backend, and Google Drive sync together with one start/stop command. The rest of this README is
+> upstream Label Studio's general documentation.
+>
+> ---
+
 ## What is Label Studio?
 
 <!-- <a href="https://labelstud.io/blog/release-130.html"><img src="https://github.com/HumanSignal/label-studio/raw/master/docs/themes/htx/source/images/release-130/LS-Hits-v1.3.png" align="right" /></a> -->
