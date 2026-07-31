@@ -8,9 +8,13 @@
 > **Perceive / Trader Joe's project note:** this fork is used as the annotation UI for the Trader Joe's
 > product-detection pipeline, together with a customized RF-DETR pre-annotation backend
 > ([`RFDETR-ML-Backend`](https://github.com/ab-shetty/RFDETR-ML-Backend)). The project-specific piece
-> here is `scripts/setup_grocery_project.sh` (idempotently creates/finds the project, local-files
-> import/export storages, and ML backend registration — see `scripts/grocery_label_config.xml` for the
-> labeling config). **Don't run this repo standalone for that project** — use
+> here is a custom folder picker in the Create Project wizard's Data Import step
+> (`web/apps/labelstudio/src/pages/CreateProject/Import/FolderPicker.jsx` +
+> `io_storages/localfiles/api.py`'s `browse-folders`/`select-folder` endpoints) that lets each person
+> point a new project at their own working folder, defaults the labeling config to the
+> "Grocery Store SKU Labeling" template (`label_studio/annotation_templates/community-contributions/
+> grocery-store-sku-labeling/config.yml`), and auto-attaches the ML backend on save.
+> **Don't run this repo standalone for that project** — use
 > [`tj-labeling-ops`](https://github.com/ab-shetty/tj-labeling-ops), which orchestrates this repo, the
 > ML backend, and Google Drive sync together with one start/stop command. The rest of this README is
 > upstream Label Studio's general documentation.

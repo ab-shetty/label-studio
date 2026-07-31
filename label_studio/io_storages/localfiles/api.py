@@ -347,7 +347,10 @@ class LocalFilesBrowseFoldersAPI(generics.GenericAPIView):
 
 
 class LocalFilesSelectFolderAPI(generics.GenericAPIView):
-    """Repoint a project's local-files import storage at a chosen subfolder and sync it."""
+    """Point a project's local-files import storage at a chosen subfolder, creating the
+    storage first if the project doesn't have one yet (e.g. a fresh Create Project draft).
+    Syncs immediately unless the caller passes sync:false -- the Create Project wizard defers
+    the sync to final publish so an abandoned draft doesn't leave synced tasks behind."""
 
     permission_required = ViewClassPermission(POST=all_permissions.storages_change)
     queryset = LocalFilesImportStorage.objects.all()
@@ -356,6 +359,7 @@ class LocalFilesSelectFolderAPI(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         project_pk = request.data.get('project')
         folder = request.data.get('folder')
+        should_sync = request.data.get('sync', True)
         if not project_pk:
             raise ValidationError('"project" is required')
         if not folder:
@@ -375,7 +379,12 @@ class LocalFilesSelectFolderAPI(generics.GenericAPIView):
 
         storage = LocalFilesImportStorage.objects.filter(project_id=project.id).first()
         if storage is None:
-            raise NotFound('Project has no local-files import storage configured')
+            storage = LocalFilesImportStorage(
+                project=project,
+                title='grocery-images',
+                regex_filter=r'.*\.(jpg|jpeg|png|webp)$',
+                use_blob_urls=True,
+            )
 
         storage.path = target_path
         storage.recursive_scan = True
@@ -384,11 +393,14 @@ class LocalFilesSelectFolderAPI(generics.GenericAPIView):
         except DjangoValidationError as e:
             raise ValidationError(str(e))
         storage.save()
-        storage.sync()
-        storage.refresh_from_db()
+
+        if should_sync:
+            storage.sync()
+            storage.refresh_from_db()
 
         return Response(
             {
+                'id': storage.id,
                 'path': storage.path,
                 'status': storage.status,
                 'last_sync_count': storage.last_sync_count,

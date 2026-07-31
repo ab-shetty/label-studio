@@ -12,6 +12,7 @@ import { sampleDatasetAtom } from "../utils/atoms";
 import "./Import.prefix.css";
 import { Button, CodeBlock, SimpleCard, Spinner, Tooltip, Typography, Badge } from "@humansignal/ui";
 import truncate from "truncate-middle";
+import { FolderPicker } from "./FolderPicker";
 import samples from "./samples.json";
 import { importFiles } from "./utils";
 
@@ -152,6 +153,7 @@ export const ImportPage = ({
   setCsvHandling,
   addColumns,
   openLabelingConfig,
+  onFolderSelected,
 }) => {
   const [error, setError] = useState();
   const [newlyUploadedFiles, setNewlyUploadedFiles] = useState(new Set());
@@ -397,6 +399,8 @@ export const ImportPage = ({
         >
           Upload {files.uploaded.length ? "More " : ""}Files
         </Button>
+        <span>or</span>
+        <FolderPicker project={project} onFolderSelected={onFolderSelected} />
         {ff.isActive(ff.FF_SAMPLE_DATASETS) && (
           <SampleDatasetSelect samples={samples} sample={sample} onSampleApplied={onSampleDatasetSelect} />
         )}

@@ -14,7 +14,6 @@ import { isDefined } from "../../utils/helpers";
 import { ImportModal } from "../CreateProject/Import/ImportModal";
 import { ExportPage } from "../ExportPage/ExportPage";
 import { APIConfig } from "./api-config";
-import { FolderPicker } from "./FolderPicker";
 
 import "./DataManager.prefix.css";
 
@@ -291,8 +290,6 @@ DataManagerPage.context = ({ dmRef }) => {
 
   return project && project.id ? (
     <Space size="small">
-      <FolderPicker project={project} />
-
       {project.expert_instruction && mode !== "explorer" && (
         <Button
           size="small"

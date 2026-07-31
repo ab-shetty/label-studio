@@ -562,6 +562,9 @@ LOCAL_FILES_DOCUMENT_ROOT = get_env('LOCAL_FILES_DOCUMENT_ROOT', default=os.path
 # Subdirectory of LOCAL_FILES_DOCUMENT_ROOT that the folder-picker (Data
 # Manager toolbar) browses -- e.g. per-labeler working folders.
 LOCAL_FILES_FOLDER_PICKER_SUBDIR = get_env('LOCAL_FILES_FOLDER_PICKER_SUBDIR', default='in-progress')
+# ML backend URL the Create Project wizard auto-attaches to every new project (if set) --
+# exposed to the frontend via window.APP_SETTINGS.default_ml_backend_url (see base.html).
+DEFAULT_ML_BACKEND_URL = get_env('DEFAULT_ML_BACKEND_URL', default=None)
 
 SYNC_ON_TARGET_STORAGE_CREATION = get_bool_env('SYNC_ON_TARGET_STORAGE_CREATION', default=True)
 

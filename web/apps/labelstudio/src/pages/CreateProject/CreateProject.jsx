@@ -97,6 +97,8 @@ export const CreateProject = ({ onClose }) => {
   const [error, setError] = React.useState();
   const [description, setDescription] = React.useState("");
   const [sample, setSample] = React.useState(null);
+  const [selectedStorageId, setSelectedStorageId] = React.useState(null);
+  const defaultConfigAppliedRef = React.useRef(false);
 
   const setStep = React.useCallback((step) => {
     _setStep(step);
@@ -128,6 +130,22 @@ export const CreateProject = ({ onClose }) => {
     project && !name && setName(project.title);
   }, [project]);
 
+  // Default the labeling config to the grocery template so a project is
+  // correctly configured even if nobody visits the Labeling Setup tab.
+  // Guarded to run (at most) once, and only while the draft still has LS's
+  // blank default config -- never clobbers a deliberate user choice.
+  React.useEffect(() => {
+    if (!project || defaultConfigAppliedRef.current) return;
+    defaultConfigAppliedRef.current = true;
+
+    api.callApi("configTemplates").then((res) => {
+      const template = res?.templates?.find((t) => t.title === "Grocery Store SKU Labeling");
+      if (template && project.label_config === "<View></View>") {
+        updateProject({ ...project, label_config: template.config });
+      }
+    });
+  }, [project]);
+
   const projectBody = React.useMemo(
     () => ({
       title: name,
@@ -154,6 +172,17 @@ export const CreateProject = ({ onClose }) => {
 
     setWaitingStatus(true);
 
+    if (selectedStorageId) {
+      // Folder was chosen but never synced (FolderPicker passes sync:false) --
+      // do it now that the project is actually being published.
+      await api.callApi("syncStorage", { params: { type: "localfiles", pk: selectedStorageId } });
+    }
+
+    const defaultMlBackendUrl = window.APP_SETTINGS?.default_ml_backend_url;
+    if (defaultMlBackendUrl) {
+      await api.callApi("addMLBackend", { body: { url: defaultMlBackendUrl, project: response.id } });
+    }
+
     if (sample) await uploadSample(sample);
 
     __lsa("create_project.create", { sample: sample?.url });
@@ -161,7 +190,7 @@ export const CreateProject = ({ onClose }) => {
     setWaitingStatus(false);
 
     history.push(`/projects/${response.id}/data`);
-  }, [project, projectBody, finishUpload]);
+  }, [project, projectBody, finishUpload, selectedStorageId]);
 
   const onSaveName = async () => {
     if (error) return;
@@ -240,6 +269,7 @@ export const CreateProject = ({ onClose }) => {
           sample={sample}
           onSampleDatasetSelect={setSample}
           openLabelingConfig={() => setStep("config")}
+          onFolderSelected={setSelectedStorageId}
           {...pageProps}
         />
         <ConfigPage
