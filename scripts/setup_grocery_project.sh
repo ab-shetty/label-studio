@@ -102,8 +102,12 @@ fi
 # ---------------------------------------------------------------------------
 # Find-or-create the import storage, then sync (pick up any new files)
 # ---------------------------------------------------------------------------
-echo "==> Checking for existing local-files import storage at $DATASET_DIR"
-storage_id=$(curl -sS "${auth[@]}" "$LS_URL/api/storages/localfiles/?project=$project_id" | find_id_by_field path "$DATASET_DIR")
+echo "==> Checking for existing local-files import storage (title=grocery-images)"
+# Matched by title, not path: the in-browser folder picker (Data Manager
+# toolbar) legitimately repoints this storage's path to a per-labeler
+# in-progress/ subfolder, so matching on path would stop finding it and
+# create a new duplicate storage every session once anyone uses the picker.
+storage_id=$(curl -sS "${auth[@]}" "$LS_URL/api/storages/localfiles/?project=$project_id" | find_id_by_field title "grocery-images")
 
 if [ -n "$storage_id" ]; then
   echo "    found existing storage id = $storage_id"
