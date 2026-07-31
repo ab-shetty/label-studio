@@ -559,6 +559,9 @@ EMAIL_BACKEND = get_env('EMAIL_BACKEND', 'django.core.mail.backends.dummy.EmailB
 ENABLE_LOCAL_FILES_STORAGE = get_bool_env('ENABLE_LOCAL_FILES_STORAGE', default=True)
 LOCAL_FILES_SERVING_ENABLED = get_bool_env('LOCAL_FILES_SERVING_ENABLED', default=False)
 LOCAL_FILES_DOCUMENT_ROOT = get_env('LOCAL_FILES_DOCUMENT_ROOT', default=os.path.abspath(os.sep))
+# Subdirectory of LOCAL_FILES_DOCUMENT_ROOT that the folder-picker (Data
+# Manager toolbar) browses -- e.g. per-labeler working folders.
+LOCAL_FILES_FOLDER_PICKER_SUBDIR = get_env('LOCAL_FILES_FOLDER_PICKER_SUBDIR', default='in-progress')
 
 SYNC_ON_TARGET_STORAGE_CREATION = get_bool_env('SYNC_ON_TARGET_STORAGE_CREATION', default=True)
 

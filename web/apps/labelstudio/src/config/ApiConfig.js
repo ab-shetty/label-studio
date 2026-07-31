@@ -51,6 +51,8 @@ export const API_CONFIG = {
     syncStorage: "POST:/storages/:target?/:type/:pk/sync",
     validateStorage: "POST:/storages/:target?/:type/validate",
     storageFiles: "POST:/storages/:target?/:type/files",
+    browseFolders: "/storages/localfiles/browse-folders",
+    selectFolder: "POST:/storages/localfiles/select-folder",
 
     // ML
     mlBackends: "GET:/ml",

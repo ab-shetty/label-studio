@@ -37,6 +37,7 @@ from io_storages.gcs.api import (
     GCSImportStorageValidateAPI,
 )
 from io_storages.localfiles.api import (
+    LocalFilesBrowseFoldersAPI,
     LocalFilesExportStorageDetailAPI,
     LocalFilesExportStorageFormLayoutAPI,
     LocalFilesExportStorageListAPI,
@@ -48,6 +49,7 @@ from io_storages.localfiles.api import (
     LocalFilesImportStorageSerializer,
     LocalFilesImportStorageSyncAPI,
     LocalFilesImportStorageValidateAPI,
+    LocalFilesSelectFolderAPI,
 )
 from io_storages.localfiles.views import localfiles_data
 from io_storages.redis.api import (
@@ -159,6 +161,14 @@ if settings.ENABLE_LOCAL_FILES_STORAGE:
         path('localfiles/<int:pk>/sync', LocalFilesImportStorageSyncAPI.as_view(), name='storage-localfiles-sync'),
         path('localfiles/validate', LocalFilesImportStorageValidateAPI.as_view(), name='storage-localfiles-validate'),
         path('localfiles/form', LocalFilesImportStorageFormLayoutAPI.as_view(), name='storage-localfiles-form'),
+        path(
+            'localfiles/browse-folders',
+            LocalFilesBrowseFoldersAPI.as_view(),
+            name='storage-localfiles-browse-folders',
+        ),
+        path(
+            'localfiles/select-folder', LocalFilesSelectFolderAPI.as_view(), name='storage-localfiles-select-folder'
+        ),
         path(
             'localfiles/files',
             ImportStorageListFilesAPI().as_view(serializer_class=LocalFilesImportStorageSerializer),

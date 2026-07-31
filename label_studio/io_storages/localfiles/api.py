@@ -1,5 +1,12 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license."""
 
+import os
+
+from core.permissions import ViewClassPermission, all_permissions
+from django.conf import settings
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils._os import safe_join
 from django.utils.decorators import method_decorator
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -17,6 +24,10 @@ from io_storages.api import (
 )
 from io_storages.localfiles.models import LocalFilesExportStorage, LocalFilesImportStorage
 from io_storages.localfiles.serializers import LocalFilesExportStorageSerializer, LocalFilesImportStorageSerializer
+from projects.models import Project
+from rest_framework import generics
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.response import Response
 
 from .openapi_schema import (
     _local_files_export_storage_schema,
@@ -303,3 +314,83 @@ class LocalFilesImportStorageFormLayoutAPI(ImportStorageFormLayoutAPI):
 
 class LocalFilesExportStorageFormLayoutAPI(ExportStorageFormLayoutAPI):
     pass
+
+
+def _folder_picker_root():
+    """Resolve+validate the fixed root the folder picker is allowed to browse under."""
+    try:
+        return safe_join(settings.LOCAL_FILES_DOCUMENT_ROOT, settings.LOCAL_FILES_FOLDER_PICKER_SUBDIR)
+    except SuspiciousFileOperation:
+        raise ValidationError('Invalid LOCAL_FILES_FOLDER_PICKER_SUBDIR configuration')
+
+
+class LocalFilesBrowseFoldersAPI(generics.GenericAPIView):
+    """List top-level subfolders under LOCAL_FILES_FOLDER_PICKER_SUBDIR (e.g. per-labeler
+    working folders) so the frontend folder picker can offer them."""
+
+    permission_required = ViewClassPermission(GET=all_permissions.storages_view)
+    queryset = LocalFilesImportStorage.objects.all()
+
+    def get(self, request, *args, **kwargs):
+        project_pk = request.query_params.get('project')
+        if not project_pk:
+            raise ValidationError('query parameter "project" is required')
+        project = generics.get_object_or_404(Project, pk=project_pk)
+        self.check_object_permissions(request, project)
+
+        browse_root = _folder_picker_root()
+        if not os.path.isdir(browse_root):
+            return Response({'folders': []})
+
+        folders = sorted(entry.name for entry in os.scandir(browse_root) if entry.is_dir())
+        return Response({'folders': folders})
+
+
+class LocalFilesSelectFolderAPI(generics.GenericAPIView):
+    """Repoint a project's local-files import storage at a chosen subfolder and sync it."""
+
+    permission_required = ViewClassPermission(POST=all_permissions.storages_change)
+    queryset = LocalFilesImportStorage.objects.all()
+    serializer_class = LocalFilesImportStorageSerializer
+
+    def post(self, request, *args, **kwargs):
+        project_pk = request.data.get('project')
+        folder = request.data.get('folder')
+        if not project_pk:
+            raise ValidationError('"project" is required')
+        if not folder:
+            raise ValidationError('"folder" is required')
+
+        project = generics.get_object_or_404(Project, pk=project_pk)
+        self.check_object_permissions(request, project)
+
+        browse_root = _folder_picker_root()
+        try:
+            target_path = safe_join(browse_root, folder)
+        except SuspiciousFileOperation:
+            raise ValidationError(f'Invalid folder "{folder}"')
+
+        if not os.path.isdir(target_path):
+            raise NotFound(f'Folder "{folder}" does not exist')
+
+        storage = LocalFilesImportStorage.objects.filter(project_id=project.id).first()
+        if storage is None:
+            raise NotFound('Project has no local-files import storage configured')
+
+        storage.path = target_path
+        storage.recursive_scan = True
+        try:
+            storage.validate_connection()
+        except DjangoValidationError as e:
+            raise ValidationError(str(e))
+        storage.save()
+        storage.sync()
+        storage.refresh_from_db()
+
+        return Response(
+            {
+                'path': storage.path,
+                'status': storage.status,
+                'last_sync_count': storage.last_sync_count,
+            }
+        )
