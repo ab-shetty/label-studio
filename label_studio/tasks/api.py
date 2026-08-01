@@ -332,10 +332,16 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
         context = self.get_retrieve_serializer_context(request)
         context['project'] = project = self.task.project
 
-        # get prediction
-        if (
-            project.evaluate_predictions_automatically or project.show_collab_predictions
-        ) and not self.task.predictions.exists():
+        # get prediction. show_collab_predictions intentionally excluded here --
+        # it controls whether existing predictions are shown to the annotator,
+        # not whether new ones get auto-generated on task open. Auto-generation
+        # is evaluate_predictions_automatically's job alone (default off; see
+        # the toggle in AnnotationSettings.jsx). Otherwise every task-open
+        # silently ran the ML backend the first time it had no prediction yet,
+        # with no way to turn that off short of disconnecting the ML backend
+        # entirely -- now there's also a manual "Pre-annotate" button in the
+        # Data Manager toolbar for on-demand retrieval.
+        if project.evaluate_predictions_automatically and not self.task.predictions.exists():
             evaluate_predictions([self.task])
             # refresh task from db with prefetches
             self.task = self.get_object()

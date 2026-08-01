@@ -68,6 +68,20 @@ export const AnnotationSettings = () => {
               </div>
 
               {(collab !== null ? collab : project.show_collab_predictions) && <ModelVersionSelector />}
+
+              <div>
+                <Toggle
+                  label="Retrieve predictions automatically"
+                  description={
+                    <span>
+                      Run the connected ML backend the first time a task with no prediction yet is opened. Off by
+                      default -- use the "Pre-annotate" button in the Data Manager toolbar to retrieve predictions
+                      on demand instead, with control over which framework to use.
+                    </span>
+                  }
+                  name="evaluate_predictions_automatically"
+                />
+              </div>
             </Form.Row>
 
             <Form.Actions>
