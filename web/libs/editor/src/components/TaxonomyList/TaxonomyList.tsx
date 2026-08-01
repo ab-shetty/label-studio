@@ -113,23 +113,27 @@ const TaxonomyList = ({
   }, [mruPaths]);
 
   const displayed = useMemo(() => {
-    const matched: Array<{ leaf: LeafItem; rank: number; mru: number; idx: number }> = [];
+    const matched: Array<{ leaf: LeafItem; sel: number; rank: number; mru: number; idx: number }> = [];
     leaves.forEach((leaf, idx) => {
       const rank = searchRank(leaf, trimmedQuery);
       if (rank === 99) return;
       const mru = mruRank.has(leaf.pathKey) ? (mruRank.get(leaf.pathKey) as number) : Number.POSITIVE_INFINITY;
-      matched.push({ leaf, rank, mru, idx });
+      matched.push({ leaf, sel: selectedKeySet.has(leaf.pathKey) ? 0 : 1, rank, mru, idx });
     });
     matched.sort((a, b) => {
-      // primary: search rank (only differs when searching)
+      // primary: what's already assigned to the selected region floats to the
+      // top, so clicking a box surfaces its current label instead of leaving
+      // the user to hunt for a highlighted chip somewhere down a long list
+      if (a.sel !== b.sel) return a.sel - b.sel;
+      // secondary: search rank (only differs when searching)
       if (a.rank !== b.rank) return a.rank - b.rank;
-      // secondary: MRU (lower = more recent)
+      // tertiary: MRU (lower = more recent)
       if (a.mru !== b.mru) return a.mru - b.mru;
-      // tertiary: original config order (stable)
+      // last: original config order (stable)
       return a.idx - b.idx;
     });
     return matched.map((m) => m.leaf);
-  }, [leaves, trimmedQuery, mruRank]);
+  }, [leaves, trimmedQuery, mruRank, selectedKeySet]);
 
   const maxUsages = options.maxUsages ? Number(options.maxUsages) : undefined;
   // maxUsages=1 switches the tag into "single selection" mode: clicking a new
