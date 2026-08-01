@@ -99,6 +99,17 @@ export const CreateProject = ({ onClose }) => {
   const [sample, setSample] = React.useState(null);
   const [selectedStorageId, setSelectedStorageId] = React.useState(null);
   const defaultConfigAppliedRef = React.useRef(false);
+  // Fired once on mount (not gated on `project`) so it's already in-flight
+  // -- or resolved -- well before onCreate can possibly run, regardless of
+  // how quickly the user clicks through to Save. onCreate awaits this
+  // directly instead of trusting that the state-updating effect below won.
+  const groceryConfigPromiseRef = React.useRef(null);
+  React.useEffect(() => {
+    groceryConfigPromiseRef.current = api
+      .callApi("configTemplates")
+      .then((res) => res?.templates?.find((t) => t.title === "Grocery Store SKU Labeling")?.config ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setStep = React.useCallback((step) => {
     _setStep(step);
@@ -135,13 +146,12 @@ export const CreateProject = ({ onClose }) => {
   // Guarded to run (at most) once, and only while the draft still has LS's
   // blank default config -- never clobbers a deliberate user choice.
   React.useEffect(() => {
-    if (!project || defaultConfigAppliedRef.current) return;
+    if (!project || defaultConfigAppliedRef.current || !groceryConfigPromiseRef.current) return;
     defaultConfigAppliedRef.current = true;
 
-    api.callApi("configTemplates").then((res) => {
-      const template = res?.templates?.find((t) => t.title === "Grocery Store SKU Labeling");
-      if (template && project.label_config === "<View></View>") {
-        updateProject({ ...project, label_config: template.config });
+    groceryConfigPromiseRef.current.then((config) => {
+      if (config && project.label_config === "<View></View>") {
+        updateProject({ ...project, label_config: config });
       }
     });
   }, [project]);
@@ -156,12 +166,22 @@ export const CreateProject = ({ onClose }) => {
   );
 
   const onCreate = React.useCallback(async () => {
+    // Belt-and-suspenders against the config-defaulting effect above losing
+    // a race with a fast Save click: if the config is still LS's blank
+    // default at publish time, await the same in-flight template fetch
+    // directly rather than trusting project.label_config state has synced.
+    let labelConfig = projectBody.label_config;
+    if (labelConfig === "<View></View>" && groceryConfigPromiseRef.current) {
+      const groceryConfig = await groceryConfigPromiseRef.current;
+      if (groceryConfig) labelConfig = groceryConfig;
+    }
+
     // First, persist project with label_config so import/reimport validates against it
     const response = await api.callApi("updateProject", {
       params: {
         pk: project.id,
       },
-      body: { ...projectBody, is_draft: false },
+      body: { ...projectBody, label_config: labelConfig, is_draft: false },
     });
 
     if (response === null) return;

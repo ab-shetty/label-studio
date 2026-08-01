@@ -332,7 +332,7 @@ def get_prepared_queryset(request, project):
     return queryset
 
 
-def evaluate_predictions(tasks):
+def evaluate_predictions(tasks, context=None):
     """
     Call the given ML backend to retrieve predictions with the task queryset as an input.
     If backend is not specified, we'll assume the tasks' project only has one associated
@@ -346,7 +346,7 @@ def evaluate_predictions(tasks):
     backend = project.ml_backend
 
     if backend:
-        return backend.predict_tasks(tasks=tasks)
+        return backend.predict_tasks(tasks=tasks, context=context)
 
 
 def filters_ordering_selected_items_exist(data):

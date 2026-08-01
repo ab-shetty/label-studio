@@ -12,6 +12,7 @@ import { GridWidthButton } from "./GridWidthButton";
 import { LabelButton } from "./LabelButton";
 import { LoadingPossum } from "./LoadingPossum";
 import { OrderButton } from "./OrderButton";
+import { PreAnnotateButton } from "./PreAnnotateButton";
 import { RefreshButton } from "./RefreshButton";
 import { ViewToggle } from "./ViewToggle";
 
@@ -96,6 +97,9 @@ export const instruments = {
   },
   actions: ({ size }) => {
     return <ActionsButton size={size} style={style} />;
+  },
+  "pre-annotate-button": ({ size }) => {
+    return <PreAnnotateButton size={size} />;
   },
   "error-box": () => {
     return <ErrorBox />;

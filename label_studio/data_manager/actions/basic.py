@@ -21,13 +21,50 @@ all_permissions = AllPermissions()
 logger = logging.getLogger(__name__)
 
 
-def retrieve_tasks_predictions(project, queryset, **kwargs):
+# Trader Joe's / RF-DETR project: cascade mode is normally baked into the
+# native ML backend process as env vars at session start (CASCADE_ENABLED /
+# SHELF_TAGS_ENABLED), the same for every prediction. This lets a user
+# override it per pre-annotation run instead -- threaded through as
+# context={'cascade_mode': ...} down to the backend's predict() call, which
+# falls back to its env-var defaults when no override is given (e.g. the
+# automatic retrieve-on-task-open path never sets this).
+RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES = {
+    'Plain (RF-DETR only, no cascade)': 'off',
+    'Cascade (+ GPT-5-mini verification)': 'cascade',
+    'Cascade + Shelf-tag correction': 'cascade_shelf_tags',
+}
+
+
+def retrieve_tasks_predictions_form(user, project):
+    return [
+        {
+            'columnCount': 1,
+            'fields': [
+                {
+                    'type': 'select',
+                    'name': 'framework',
+                    'label': 'Pre-annotation framework',
+                    'options': list(RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES.keys()),
+                },
+            ],
+        }
+    ]
+
+
+def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     """Retrieve predictions by tasks ids
 
     :param project: project instance
     :param queryset: filtered tasks db queryset
+    :param request: originating request; may carry a 'framework' field (see
+        retrieve_tasks_predictions_form) selecting which RF-DETR cascade mode
+        to use for this run
     """
-    evaluate_predictions(queryset)
+    context = None
+    framework = request.data.get('framework')
+    if framework in RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES:
+        context = {'cascade_mode': RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES[framework]}
+    evaluate_predictions(queryset, context=context)
     return {'processed_items': queryset.count(), 'detail': 'Retrieved ' + str(queryset.count()) + ' predictions'}
 
 
@@ -179,11 +216,14 @@ actions: list[DataManagerAction] = [
         'order': 90,
         'dialog': {
             'title': 'Retrieve Predictions',
-            'text': 'Send the selected tasks to all ML backends connected to the project.'
+            'text': 'Send the selected tasks to the ML backend connected to the project. '
+            'Choose which pre-annotation framework to run -- picking one re-predicts the '
+            'selected tasks even if they already have predictions from a previous run. '
             'This operation might be abruptly interrupted due to a timeout. '
             'The recommended way to get predictions is to update tasks using the Label Studio API.'
             'Please confirm your action.',
             'type': 'confirm',
+            'form': retrieve_tasks_predictions_form,
         },
     },
     {

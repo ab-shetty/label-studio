@@ -1,7 +1,7 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license."""
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from core.utils.common import conditional_atomic, db_is_not_sqlite, load_func
 from django.conf import settings
@@ -259,7 +259,7 @@ class MLBackend(models.Model):
         }
 
     def _get_predictions_from_ml_backend_one_by_one(
-        self, serialized_tasks: List[Dict], current_responses: List[Dict]
+        self, serialized_tasks: List[Dict], current_responses: List[Dict], context: Optional[Dict] = None
     ) -> List[Dict]:
         """
         This is helper method to get predictions from ML backend one by one
@@ -277,7 +277,7 @@ class MLBackend(models.Model):
             predictions = []
             for serialized_task in serialized_tasks:
                 # get predictions per task
-                predictions.extend(self._get_predictions_from_ml_backend([serialized_task]))
+                predictions.extend(self._get_predictions_from_ml_backend([serialized_task], context=context))
 
             return predictions
         else:
@@ -289,8 +289,8 @@ class MLBackend(models.Model):
             )
             return []
 
-    def _get_predictions_from_ml_backend(self, serialized_tasks: List[Dict]) -> List[Dict]:
-        result = self.api.make_predictions(serialized_tasks, self.project)
+    def _get_predictions_from_ml_backend(self, serialized_tasks: List[Dict], context: Optional[Dict] = None) -> List[Dict]:
+        result = self.api.make_predictions(serialized_tasks, self.project, context=context)
 
         # response validation
         if result.is_error:
@@ -338,7 +338,7 @@ class MLBackend(models.Model):
                 )
         return predictions
 
-    def predict_tasks(self, tasks):
+    def predict_tasks(self, tasks, context=None):
         model_version = self.update_state()
         if self.not_ready:
             logger.debug(f'ML backend {self} is not ready')
@@ -349,15 +349,20 @@ class MLBackend(models.Model):
 
             tasks = Task.objects.filter(id__in=[task.id for task in tasks])
 
-        # Filter tasks that already contain the current model version in predictions
-        tasks = tasks.annotate(predictions_count=Count('predictions')).exclude(
-            Q(predictions_count__gt=0) & Q(predictions__model_version=model_version)
-        )
+        # Filter tasks that already contain the current model version in predictions.
+        # Skipped entirely when a context override (e.g. a chosen pre-annotation
+        # framework) is passed explicitly -- that's a deliberate manual re-run and
+        # should re-predict even tasks that already have a same-model_version
+        # prediction from a previous framework choice.
+        if not context:
+            tasks = tasks.annotate(predictions_count=Count('predictions')).exclude(
+                Q(predictions_count__gt=0) & Q(predictions__model_version=model_version)
+            )
         if not tasks.exists():
             logger.debug(f'All tasks already have prediction from model version={self.model_version}')
             return model_version
         tasks_ser = TaskSimpleSerializer(tasks, many=True).data
-        predictions = self._get_predictions_from_ml_backend(tasks_ser)
+        predictions = self._get_predictions_from_ml_backend(tasks_ser, context=context)
         with conditional_atomic(predicate=db_is_not_sqlite):
             prediction_ser = PredictionSerializer(data=predictions, many=True)
             prediction_ser.is_valid(raise_exception=True)

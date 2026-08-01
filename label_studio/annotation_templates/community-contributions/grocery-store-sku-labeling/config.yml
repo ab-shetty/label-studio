@@ -1,6 +1,7 @@
 title: Grocery Store SKU Labeling
 type: community
 group: Community Contributions
+order: 0
 details: <h1>Grocery Store SKU Labeling</h1><p>Bounding boxes + Taxonomy SKU search over the Trader Joe's product catalog.</p>
 config: |
   <View style="display: flex; align-items: flex-start; gap: 16px;">

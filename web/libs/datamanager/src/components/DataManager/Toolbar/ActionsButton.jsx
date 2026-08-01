@@ -154,7 +154,7 @@ const ActionButton = ({ action, parentRef, store, formRef }) => {
   );
 };
 
-const invokeAction = (action, destructive, store, formRef) => {
+export const invokeAction = (action, destructive, store, formRef) => {
   if (action.dialog) {
     const { type: dialogType, text, form, title } = action.dialog;
     const dialog = Modal[dialogType] ?? Modal.confirm;
