@@ -60,7 +60,12 @@ RUN --mount=type=cache,target=/root/web/.yarn,id=yarn-cache,sharing=locked \
     yarn version:libs
 
 ################################ Stage: venv-builder (prepare the virtualenv)
-FROM python:${PYTHON_VERSION}-alpine AS venv-builder
+# glibc (not Alpine/musl) so pip can pull prebuilt manylinux wheels instead of
+# compiling from source -- opencv-python-headless in particular ships no
+# musllinux wheel at all, so on Alpine this stage was compiling the entire
+# OpenCV C++ library from source on every CI build (~48 of the ~50 total
+# build minutes, verified from real GHA build logs).
+FROM python:${PYTHON_VERSION}-slim AS venv-builder
 ARG POETRY_VERSION
 ARG PYTHON_VERSION
 
@@ -76,12 +81,13 @@ ENV PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_PREFER_ACTIVE_PYTHON=true \
     PATH="/opt/poetry/bin:$PATH"
 
-RUN apk add --no-cache \
-    build-base \
+# build-essential + libpcre2-dev cover pyuwsgi's routing/regex plugin, the one
+# package in the lockfile with no prebuilt wheel for any platform.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     git \
-    linux-headers \
-    python3-dev \
-    pcre2-dev
+    libpcre2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 ADD https://install.python-poetry.org /tmp/install-poetry.py
 RUN python /tmp/install-poetry.py
@@ -125,7 +131,7 @@ RUN --mount=type=bind,source=.git,target=./.git \
     VERSION_OVERRIDE=${VERSION_OVERRIDE} BRANCH_OVERRIDE=${BRANCH_OVERRIDE} poetry run python label_studio/core/version.py
 
 ################################### Stage: prod
-FROM python:${PYTHON_VERSION}-alpine AS production
+FROM python:${PYTHON_VERSION}-slim AS production
 
 ENV LS_DIR=/label-studio \
     HOME=/label-studio \
@@ -138,15 +144,17 @@ ENV LS_DIR=/label-studio \
 
 WORKDIR $LS_DIR
 
-# install prerequisites for app
-RUN apk add --no-cache \
-    expat \
-    mesa-gl \
-    glib \
+# install prerequisites for app (debian equivalents of the old apk list:
+# expat->libexpat1, mesa-gl->libgl1, glib->libglib2.0-0)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libexpat1 \
+    libgl1 \
+    libglib2.0-0 \
     curl \
     nginx \
     bash \
-    procps
+    procps \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
     mkdir -p $LS_DIR $LABEL_STUDIO_BASE_DATA_DIR $OPT_DIR && \
