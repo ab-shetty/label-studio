@@ -34,7 +34,17 @@ const PerRegionMixin = types
 
       if (!area) return null;
 
-      return self.annotation.results.find((r) => r.from_name === self && r.area === area);
+      // Two shapes exist for a per-region result: manually creating one
+      // (draw a region, then classify it) reuses the SAME area object
+      // (r.area === area, via createPerRegionResult -> area.setValue). But a
+      // result loaded from serialized JSON with its own `id` linked via
+      // `parentID` (e.g. predictions -- our RF-DETR backend emits a separate
+      // taxonomy result per box, parentID pointing at the box's id) becomes
+      // its own distinct Area object on deserialize, so r.area !== area even
+      // though it correctly belongs to this region. Match either shape.
+      return self.annotation.results.find(
+        (r) => r.from_name === self && (r.area === area || r.area?.parentID === area.id),
+      );
     },
     perRegionVisible() {
       if (!self.perregion) return true;
