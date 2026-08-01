@@ -1212,13 +1212,21 @@ const _Annotation = types
         const controlName = a.results[0].from_name.name;
         // May be null but null is also valid key in this case
         const itemIndex = a.item_index;
+        // Per-region classification areas (e.g. a perRegion Taxonomy) each
+        // belong to a different parent region -- without including parentID
+        // in the key, every per-region classification for the same control
+        // tag collapses onto the same (controlName, itemIndex) key and gets
+        // treated as a duplicate of every other one, deleting all but the
+        // last. parentID is null/undefined for non-per-region classification,
+        // so this doesn't change behavior for that case.
+        const key = `${itemIndex}::${a.parentID ?? ""}`;
 
         if (a.classification) {
-          if (classificationAreasByControlName[controlName]?.[itemIndex]) {
-            duplicateAreaIds.push(classificationAreasByControlName[controlName][itemIndex]);
+          if (classificationAreasByControlName[controlName]?.[key]) {
+            duplicateAreaIds.push(classificationAreasByControlName[controlName][key]);
           }
           classificationAreasByControlName[controlName] = classificationAreasByControlName[controlName] || {};
-          classificationAreasByControlName[controlName][itemIndex] = a.id;
+          classificationAreasByControlName[controlName][key] = a.id;
         }
       });
       for (const id of duplicateAreaIds) {
