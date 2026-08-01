@@ -1,11 +1,13 @@
 import { observer } from "mobx-react";
 import { types } from "mobx-state-tree";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Registry from "../../core/Registry";
 import Tree from "../../core/Tree";
 import Types from "../../core/Types";
 import VisibilityMixin from "../../mixins/Visibility";
 import { AnnotationMixin } from "../../mixins/AnnotationMixin";
+import "./View.prefix.css";
 
 /**
  * The `View` element is used to configure the display of blocks, similar to the div tag in HTML.
@@ -59,6 +61,10 @@ import { AnnotationMixin } from "../../mixins/AnnotationMixin";
  * @param {string} [style] CSS style string
  * @param {string} [className] - Class name of the CSS style to apply. Use with the Style tag
  * @param {string} [idAttr] - Unique ID attribute to use in CSS
+ * @param {boolean} [resizable=false] Put a draggable divider between this View's first child and the rest, letting the user trade width between the two (e.g. image vs. label list). The split is remembered per View id.
+ * @param {number} [defaultSplit=45] Use with `resizable`. Starting width of the first child, as a percentage.
+ * @param {number} [minSplit=20] Use with `resizable`. Smallest width the first child can be dragged to, as a percentage.
+ * @param {number} [maxSplit=80] Use with `resizable`. Largest width the first child can be dragged to, as a percentage.
  * @param {region-selected|choice-selected|no-region-selected|choice-unselected} [visibleWhen] Control visibility of the content. Can also be used with the `when*` parameters below to narrow visibility
  * @param {string} [whenTagName] Use with `visibleWhen`. Narrow down visibility by tag name. For regions, use the name of the object tag, for choices, use the name of the `choices` tag
  * @param {string} [whenLabelValue] Use with `visibleWhen="region-selected"`. Narrow down visibility by label value. Multiple values can be separated with commas
@@ -69,6 +75,10 @@ const TagAttrs = types.model({
   display: types.optional(types.string, "block"),
   style: types.maybeNull(types.string),
   idattr: types.optional(types.string, ""),
+  resizable: types.optional(types.boolean, false),
+  defaultsplit: types.optional(types.string, "45"),
+  minsplit: types.optional(types.string, "20"),
+  maxsplit: types.optional(types.string, "80"),
 });
 
 const Model = types
@@ -143,6 +153,104 @@ const Model = types
 
 const ViewModel = types.compose("ViewModel", TagAttrs, Model, VisibilityMixin, AnnotationMixin);
 
+const SPLIT_STORAGE_PREFIX = "ls:view-split:";
+
+const clampSplit = (value, min, max) => Math.min(max, Math.max(min, value));
+
+/**
+ * Splits a View's children into two panes with a draggable divider between the
+ * first child and the rest. The width lives in local state (not the MST tree)
+ * so dragging doesn't churn the annotation store, and is persisted per View id
+ * so it survives moving between tasks and reloading.
+ */
+const ResizableView = observer(({ item, style }) => {
+  const min = Number(item.minsplit) || 20;
+  const max = Number(item.maxsplit) || 80;
+  const storageKey = `${SPLIT_STORAGE_PREFIX}${item.idattr || item.id}`;
+
+  const containerRef = useRef(null);
+  const [split, setSplit] = useState(() => {
+    const stored = Number(localStorage.getItem(storageKey));
+    const initial = Number.isFinite(stored) && stored > 0 ? stored : Number(item.defaultsplit) || 45;
+    return clampSplit(initial, min, max);
+  });
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!dragging) return undefined;
+
+    const onMove = (e) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect?.width) return;
+      setSplit(clampSplit(((e.clientX - rect.left) / rect.width) * 100, min, max));
+    };
+    const onUp = () => setDragging(false);
+
+    // `capture` so a pane that stops propagation (the image canvas swallows
+    // pointer events for its own pan/zoom handling) can't strand a drag.
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+    return () => {
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+    };
+  }, [dragging, min, max]);
+
+  useEffect(() => {
+    if (dragging) return;
+    localStorage.setItem(storageKey, String(split));
+  }, [dragging, split, storageKey]);
+
+  const onKeyDown = useCallback(
+    (e) => {
+      const step = e.shiftKey ? 10 : 2;
+      if (e.key === "ArrowLeft") setSplit((s) => clampSplit(s - step, min, max));
+      else if (e.key === "ArrowRight") setSplit((s) => clampSplit(s + step, min, max));
+      else if (e.key === "Home") setSplit(clampSplit(Number(item.defaultsplit) || 45, min, max));
+      else return;
+      e.preventDefault();
+    },
+    [min, max, item.defaultsplit],
+  );
+
+  const children = Tree.renderChildren(item, item.annotation) ?? [];
+  const [first, ...rest] = children;
+
+  return (
+    <div
+      ref={containerRef}
+      id={item.idattr}
+      className={`${item.classname} lsf-view-split`}
+      style={{ ...style, display: "flex", alignItems: "flex-start" }}
+      data-dragging={dragging || undefined}
+    >
+      <div className="lsf-view-split__pane" style={{ flex: `0 0 ${split}%` }}>
+        {first}
+      </div>
+      <div
+        className="lsf-view-split__handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(split)}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-label="Resize panes"
+        tabIndex={0}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      <div className="lsf-view-split__pane" style={{ flex: "1 1 auto" }}>
+        {rest}
+      </div>
+    </div>
+  );
+});
+
 const HtxView = observer(({ item }) => {
   let style = {};
 
@@ -156,6 +264,11 @@ const HtxView = observer(({ item }) => {
 
   if (item.isVisible === false) {
     style.display = "none";
+  }
+
+  // A divider only means something with two sides to trade width between.
+  if (item.resizable && item.isVisible !== false && (item.children?.length ?? 0) > 1) {
+    return <ResizableView item={item} style={style} />;
   }
 
   return (

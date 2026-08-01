@@ -4,12 +4,12 @@ group: Community Contributions
 order: 0
 details: <h1>Grocery Store SKU Labeling</h1><p>Bounding boxes + Taxonomy SKU search over the Trader Joe's product catalog.</p>
 config: |
-  <View style="display: flex; align-items: flex-start; gap: 16px;">
-    <View style="flex: 0 0 45%;">
+  <View resizable="true" defaultSplit="45" minSplit="20" maxSplit="80">
+    <View>
       <Image name="image" value="$image" zoom="true" zoomControl="true" scrollZoom="true"/>
     </View>
   
-    <View style="flex: 1 1 auto; min-width: 0; position: sticky; top: 0;">
+    <View style="position: sticky; top: 0;">
       <RectangleLabels name="bbox" toName="image">
         <Label value="Product" background="#0070f3" selected="true"/>
       </RectangleLabels>

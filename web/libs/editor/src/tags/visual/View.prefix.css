@@ -1,0 +1,58 @@
+.view-split {
+  &__pane {
+    /* Without this a flex item refuses to shrink below its content's intrinsic
+       width, so dragging the divider past a wide child (a long SKU chip row,
+       an unscaled image) would jam instead of resize. */
+    min-width: 0;
+  }
+
+  &__handle {
+    flex: 0 0 auto;
+    align-self: stretch;
+    /* Wide enough to grab comfortably; the visible line is drawn narrower via
+       the inner gradient so the target stays bigger than it looks. */
+    width: 11px;
+    min-height: 120px;
+    margin: 0 2px;
+    padding: 0;
+    border: 0;
+    cursor: col-resize;
+    background: linear-gradient(
+      to right,
+      transparent 0,
+      transparent 4px,
+      var(--color-neutral-border) 4px,
+      var(--color-neutral-border) 7px,
+      transparent 7px,
+      transparent 100%
+    );
+    border-radius: 4px;
+    touch-action: none;
+    transition: background-color 0.12s ease;
+  }
+
+  &__handle:hover,
+  &__handle:focus-visible {
+    background: linear-gradient(
+      to right,
+      transparent 0,
+      transparent 3px,
+      var(--color-primary-border) 3px,
+      var(--color-primary-border) 8px,
+      transparent 8px,
+      transparent 100%
+    );
+    outline: none;
+  }
+
+  /* While dragging, kill text selection and pointer events inside the panes:
+     otherwise the drag selects labels, and the image canvas swallows the
+     pointermove events we need to follow the cursor. */
+  &[data-dragging] {
+    user-select: none;
+  }
+
+  &[data-dragging] .view-split__pane {
+    pointer-events: none;
+  }
+}
