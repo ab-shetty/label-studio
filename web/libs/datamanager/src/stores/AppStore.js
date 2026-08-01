@@ -712,12 +712,17 @@ export const AppStore = types
       const viewReloaded = view;
       let projectFetched = self.project;
 
-      const needsLock = self.availableActions.findIndex((a) => a.id === actionId) >= 0;
-
       const { selected } = view;
       const actionCallback = self.SDK.getAction(actionId);
 
-      if (view && needsLock && !actionCallback) view.lock();
+      // Lock (shows the LoadingPossum spinner, tied to view.locked) for any
+      // action that actually hits the server -- not just the small set of
+      // client-registered JS callback actions (e.g. next_task) that
+      // self.availableActions previously restricted this to. Server-driven
+      // bulk actions like "Retrieve Predictions" or "Delete Tasks" go
+      // through this same path and can run just as long, but were never
+      // locking/spinning at all.
+      if (view && !actionCallback) view.lock();
 
       const labelStreamMode = localStorage.getItem("dm:labelstream:mode");
 
