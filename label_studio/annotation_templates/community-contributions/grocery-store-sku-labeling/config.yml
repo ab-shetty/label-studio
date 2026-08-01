@@ -6,7 +6,7 @@ details: <h1>Grocery Store SKU Labeling</h1><p>Bounding boxes + Taxonomy SKU sea
 config: |
   <View resizable="true" defaultSplit="45" minSplit="20" maxSplit="80">
     <View>
-      <Image name="image" value="$image" zoom="true" zoomControl="true" scrollZoom="true"/>
+      <Image name="image" value="$image" zoom="true" zoomControl="true" scrollZoom="true" maxHeight="none"/>
     </View>
   
     <View style="position: sticky; top: 0;">

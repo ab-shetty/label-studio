@@ -158,6 +158,30 @@ const SPLIT_STORAGE_PREFIX = "ls:view-split:";
 const clampSplit = (value, min, max) => Math.min(max, Math.max(min, value));
 
 /**
+ * A stable storage key for a View's split position.
+ *
+ * Not `item.id`: a View carries no `name`, so Tree.tagIntoObject falls back to
+ * `guidGenerator()` and hands it a different id every time the config is parsed
+ * — i.e. on every task. Keying storage on that silently resets the split each
+ * time you move between tasks. The names of the tags nested inside are declared
+ * in the config, so they're the same on every parse and different between
+ * configs, which is exactly the identity we want.
+ */
+const splitStorageKey = (item) => {
+  if (item.idattr) return item.idattr;
+
+  const names = [];
+  const walk = (node) => {
+    for (const child of node.children ?? []) {
+      if (child.name) names.push(child.name);
+      walk(child);
+    }
+  };
+  walk(item);
+  return names.join(",") || "default";
+};
+
+/**
  * Splits a View's children into two panes with a draggable divider between the
  * first child and the rest. The width lives in local state (not the MST tree)
  * so dragging doesn't churn the annotation store, and is persisted per View id
@@ -166,7 +190,7 @@ const clampSplit = (value, min, max) => Math.min(max, Math.max(min, value));
 const ResizableView = observer(({ item, style }) => {
   const min = Number(item.minsplit) || 20;
   const max = Number(item.maxsplit) || 80;
-  const storageKey = `${SPLIT_STORAGE_PREFIX}${item.idattr || item.id}`;
+  const storageKey = `${SPLIT_STORAGE_PREFIX}${splitStorageKey(item)}`;
 
   const containerRef = useRef(null);
   const [split, setSplit] = useState(() => {
@@ -223,7 +247,7 @@ const ResizableView = observer(({ item, style }) => {
       ref={containerRef}
       id={item.idattr}
       className={`${item.classname} lsf-view-split`}
-      style={{ ...style, display: "flex", alignItems: "flex-start" }}
+      style={{ ...style, display: "flex", alignItems: "stretch" }}
       data-dragging={dragging || undefined}
     >
       <div className="lsf-view-split__pane" style={{ flex: `0 0 ${split}%` }}>
