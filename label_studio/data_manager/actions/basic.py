@@ -48,33 +48,33 @@ def retrieve_tasks_predictions_form(user, project):
                 },
                 {
                     'type': 'number',
-                    'name': 'score_threshold',
-                    'label': 'Detection threshold (0-1, blank = model default)',
+                    'name': 'detection_floor',
+                    'label': 'Detection floor (0-1, blank = configured default)',
                     'min': 0,
                     'max': 1,
                     'step': 0.05,
-                    'placeholder': 'e.g. 0.5',
+                    'placeholder': 'e.g. 0.20',
                 },
             ],
         }
     ]
 
 
-def _parse_score_threshold(raw):
-    """Validate the optional detection-threshold field. Blank means "leave it to
-    the backend's own default"; anything unparseable or out of [0, 1] is ignored
-    rather than raised, so a typo degrades to the default instead of failing a
-    long bulk run outright.
+def _parse_detection_floor(raw):
+    """Validate the optional detection-floor field. Blank means "leave it to the
+    backend's own default" (CASCADE_FLOOR); anything unparseable or out of
+    [0, 1] is ignored rather than raised, so a typo degrades to the default
+    instead of failing a long bulk run outright.
     """
     if raw is None or raw == '':
         return None
     try:
         value = float(raw)
     except (TypeError, ValueError):
-        logger.warning(f'Ignoring non-numeric score_threshold: {raw!r}')
+        logger.warning(f'Ignoring non-numeric detection_floor: {raw!r}')
         return None
     if not 0 <= value <= 1:
-        logger.warning(f'Ignoring out-of-range score_threshold: {value}')
+        logger.warning(f'Ignoring out-of-range detection_floor: {value}')
         return None
     return value
 
@@ -85,16 +85,16 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     :param project: project instance
     :param queryset: filtered tasks db queryset
     :param request: originating request; may carry 'framework' and
-        'score_threshold' fields (see retrieve_tasks_predictions_form) selecting
+        'detection_floor' fields (see retrieve_tasks_predictions_form) selecting
         which RF-DETR cascade mode and detection cutoff to use for this run
     """
     context = {}
     framework = request.data.get('framework')
     if framework in RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES:
         context['cascade_mode'] = RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES[framework]
-    score_threshold = _parse_score_threshold(request.data.get('score_threshold'))
-    if score_threshold is not None:
-        context['score_threshold'] = score_threshold
+    detection_floor = _parse_detection_floor(request.data.get('detection_floor'))
+    if detection_floor is not None:
+        context['detection_floor'] = detection_floor
     evaluate_predictions(queryset, context=context or None)
     return {'processed_items': queryset.count(), 'detail': 'Retrieved ' + str(queryset.count()) + ' predictions'}
 
