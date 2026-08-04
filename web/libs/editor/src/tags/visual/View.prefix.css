@@ -1,9 +1,29 @@
 .view-split {
+  /* The two panes scroll independently, which is the whole point of splitting
+     them: scrolling to the bottom of a tall shelf photo used to carry the SKU
+     list off the top of the screen, so you could not see which label the box
+     you were looking at had. (The config's `position: sticky` on the label
+     pane cannot fix that -- sticky positions against the nearest scrolling
+     ancestor, and here that is the page, so the pane scrolls away with it.)
+
+     Independent scrolling needs a BOUNDED height: `overflow: auto` on a pane
+     whose height is free to grow just makes it taller instead of scrolling.
+     The height is a custom property so it can be tuned per deployment (or live
+     from devtools) without a rebuild -- the fallback leaves room for Label
+     Studio's own toolbar and the annotation controls above/below. */
+  max-height: var(--view-split-height, calc(100vh - 13rem));
+  overflow: hidden;
+
   &__pane {
     /* Without this a flex item refuses to shrink below its content's intrinsic
        width, so dragging the divider past a wide child (a long SKU chip row,
        an unscaled image) would jam instead of resize. */
     min-width: 0;
+    /* Same reasoning vertically: a flex item's default min-height of auto
+       refuses to shrink below its content, which would defeat the overflow
+       below and push the whole split past its max-height. */
+    min-height: 0;
+    overflow: auto;
   }
 
   &__handle {
