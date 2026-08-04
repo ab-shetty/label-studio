@@ -151,9 +151,22 @@ const Model = types
     },
   }));
 
-const ViewModel = types.compose("ViewModel", TagAttrs, Model, VisibilityMixin, AnnotationMixin);
+const ViewModel = types.compose(
+  "ViewModel",
+  TagAttrs,
+  Model,
+  VisibilityMixin,
+  AnnotationMixin,
+);
 
 const SPLIT_STORAGE_PREFIX = "ls:view-split:";
+
+/* Each pane its own scroll container, so reaching the bottom of a tall shelf
+   photo no longer carries the SKU list off the top of the screen. min-width/
+   min-height 0 defeat flex's automatic minimum, which otherwise refuses to
+   shrink a pane below its content -- that would both jam the drag and push the
+   split past the max-height that makes the scrolling work at all. */
+const PANE_STYLE = { minWidth: 0, minHeight: 0, overflow: "auto" };
 
 const clampSplit = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -195,7 +208,10 @@ const ResizableView = observer(({ item, style }) => {
   const containerRef = useRef(null);
   const [split, setSplit] = useState(() => {
     const stored = Number(localStorage.getItem(storageKey));
-    const initial = Number.isFinite(stored) && stored > 0 ? stored : Number(item.defaultsplit) || 45;
+    const initial =
+      Number.isFinite(stored) && stored > 0
+        ? stored
+        : Number(item.defaultsplit) || 45;
     return clampSplit(initial, min, max);
   });
   const [dragging, setDragging] = useState(false);
@@ -206,7 +222,9 @@ const ResizableView = observer(({ item, style }) => {
     const onMove = (e) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect?.width) return;
-      setSplit(clampSplit(((e.clientX - rect.left) / rect.width) * 100, min, max));
+      setSplit(
+        clampSplit(((e.clientX - rect.left) / rect.width) * 100, min, max),
+      );
     };
     const onUp = () => setDragging(false);
 
@@ -230,9 +248,12 @@ const ResizableView = observer(({ item, style }) => {
   const onKeyDown = useCallback(
     (e) => {
       const step = e.shiftKey ? 10 : 2;
-      if (e.key === "ArrowLeft") setSplit((s) => clampSplit(s - step, min, max));
-      else if (e.key === "ArrowRight") setSplit((s) => clampSplit(s + step, min, max));
-      else if (e.key === "Home") setSplit(clampSplit(Number(item.defaultsplit) || 45, min, max));
+      if (e.key === "ArrowLeft")
+        setSplit((s) => clampSplit(s - step, min, max));
+      else if (e.key === "ArrowRight")
+        setSplit((s) => clampSplit(s + step, min, max));
+      else if (e.key === "Home")
+        setSplit(clampSplit(Number(item.defaultsplit) || 45, min, max));
       else return;
       e.preventDefault();
     },
@@ -247,10 +268,29 @@ const ResizableView = observer(({ item, style }) => {
       ref={containerRef}
       id={item.idattr}
       className={`${item.classname} lsf-view-split`}
-      style={{ ...style, display: "flex", alignItems: "stretch" }}
+      // Layout is INLINE, not in View.prefix.css, and deliberately so: that
+      // stylesheet is a lazy webpack chunk the app requests from
+      // /label-studio-frontend/, which nginx does not serve (it only aliases
+      // /react-app/), so it 404s and none of its rules ever apply. The flex
+      // sizing below always worked for exactly this reason. Until the chunk is
+      // reachable, anything the split NEEDS in order to function has to live
+      // here. See deploy/default.conf.
+      style={{
+        ...style,
+        display: "flex",
+        alignItems: "stretch",
+        // Panes scroll independently only if the split's own height is bounded:
+        // `overflow: auto` on a pane free to grow just makes the pane taller.
+        // Tunable at runtime without a rebuild.
+        maxHeight: "var(--view-split-height, calc(100vh - 13rem))",
+        overflow: "hidden",
+      }}
       data-dragging={dragging || undefined}
     >
-      <div className="lsf-view-split__pane" style={{ flex: `0 0 ${split}%` }}>
+      <div
+        className="lsf-view-split__pane"
+        style={{ flex: `0 0 ${split}%`, ...PANE_STYLE }}
+      >
         {first}
       </div>
       <div
@@ -268,7 +308,10 @@ const ResizableView = observer(({ item, style }) => {
         }}
         onKeyDown={onKeyDown}
       />
-      <div className="lsf-view-split__pane" style={{ flex: "1 1 auto" }}>
+      <div
+        className="lsf-view-split__pane"
+        style={{ flex: "1 1 auto", ...PANE_STYLE }}
+      >
         {rest}
       </div>
     </div>
@@ -291,7 +334,11 @@ const HtxView = observer(({ item }) => {
   }
 
   // A divider only means something with two sides to trade width between.
-  if (item.resizable && item.isVisible !== false && (item.children?.length ?? 0) > 1) {
+  if (
+    item.resizable &&
+    item.isVisible !== false &&
+    (item.children?.length ?? 0) > 1
+  ) {
     return <ResizableView item={item} style={style} />;
   }
 
