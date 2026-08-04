@@ -222,34 +222,36 @@ class Task(TaskMixin, FsmHistoryStateModel):
             return lock.task
 
     def get_predictions_for_prelabeling(self):
-        """This is called to return either new predictions from the
-        model or grab static predictions if they were set, depending
-        on the projects configuration.
+        """Predictions to show with this task. NEVER runs the model.
 
+        Upstream calls evaluate_predictions() here, which sends the task to the
+        connected ML backend and BLOCKS until it answers. That turns opening the
+        Label Stream into a full inference run: measured at 24.3s per task on
+        this project (`POST /api/dm/actions?id=next_task` wrapping an OpenAI call
+        from the RF-DETR cascade's shelf-tag read), which is unusable when the
+        queue is 174 frames.
+
+        It also duplicates -- and races -- the Pre-annotate button, which is the
+        one place inference is supposed to start. That button invokes the
+        `retrieve_tasks_predictions` bulk action on the tasks the user selected,
+        with the detection floor they chose; nothing here touches that path, so
+        Pre-annotate is unaffected.
+
+        Note this is deliberately NOT the same as switching off
+        `show_collab_predictions` on a project. That flag still gates whether
+        stored predictions are SHOWN, which is worth keeping. What is removed is
+        the ability to trigger inference by opening a task -- something no
+        project setting should be able to switch back on by accident.
         """
-        from data_manager.functions import evaluate_predictions
-
         project = self.project
         predictions = self.predictions
 
-        # TODO if we use live_model on project then we will need to check for it here
-        if project.show_collab_predictions and project.model_version is not None:
-            if project.ml_backend_in_model_version:
-                new_predictions = evaluate_predictions([self])
-                # TODO this is not as clean as I'd want it to
-                # be. Effectively retrieve_predictions will work only for
-                # tasks where there is no predictions matching current
-                # model version. In case it will return a model_version
-                # and we can grab predictions explicitly
-                if isinstance(new_predictions, str):
-                    model_version = new_predictions
-                    return predictions.filter(model_version=model_version)
-                else:
-                    return new_predictions
-            else:
-                return predictions.filter(model_version=project.model_version)
-        else:
+        if not (project.show_collab_predictions and project.model_version is not None):
             return []
+        # Whatever Pre-annotate (or an offline bulk import) already stored for
+        # the current model version. Empty is a normal answer: it means nobody
+        # has pre-annotated this task yet.
+        return predictions.filter(model_version=project.model_version)
 
     def get_lock_exclude_query(self, user):
         """
