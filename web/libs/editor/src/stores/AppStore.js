@@ -458,6 +458,18 @@ export default types
         }
       });
 
+      // Accept a pre-annotated region, the mirror of backspace rejecting one.
+      // Deliberately a bare letter: on a relabeling pass this is pressed as
+      // often as the delete it sits opposite, and a chord for one but not the
+      // other makes keeping look more expensive than discarding.
+      hotkeys.addNamed("region:accept", () => {
+        const c = self.annotationStore.selected;
+
+        if (c && !c.isLinkingMode && !c.isDrawing) {
+          c.acceptSelectedProposals();
+        }
+      });
+
       hotkeys.addNamed("region:lock", () => {
         const c = self.annotationStore.selected;
 

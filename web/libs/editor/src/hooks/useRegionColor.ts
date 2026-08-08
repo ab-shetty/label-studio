@@ -5,6 +5,14 @@ import { ImageViewContext } from "../components/ImageView/ImageViewContext";
 import Constants, { defaultStyle } from "../core/Constants";
 import { isDefined } from "../utils/utilities";
 
+// An unaccepted proposal has to be readable as "not yours yet" at a glance,
+// while a frame is carrying dozens of boxes. Amber reads as provisional next
+// to the blue of a drawn region, and is not the red the editor already uses
+// for the selected one. The dash carries the same signal for anyone who does
+// not separate those hues.
+const PROPOSAL_STROKE_COLOR = "#f5a623";
+const PROPOSAL_DASH = [6, 4];
+
 const defaultStyles = {
   defaultOpacity: defaultStyle.opacity,
   defaultFillColor: defaultStyle.fillcolor,
@@ -54,7 +62,15 @@ export const getRegionStyles = ({
         .css()
     : null;
 
-  const strokeColor = selected ? defaultStrokeColorHighlighted : chroma(style?.strokecolor ?? defaultStrokeColor).css();
+  // Selection still wins: while you are working on a box you need to see
+  // which one it is more than you need to see where it came from.
+  const proposal = region.isProposal === true && !selected;
+
+  const strokeColor = selected
+    ? defaultStrokeColorHighlighted
+    : proposal
+      ? PROPOSAL_STROKE_COLOR
+      : chroma(style?.strokecolor ?? defaultStrokeColor).css();
 
   const strokeWidth = (() => {
     if (suggestion) {
@@ -70,6 +86,7 @@ export const getRegionStyles = ({
     strokeColor,
     fillColor,
     strokeWidth,
+    dash: proposal ? PROPOSAL_DASH : undefined,
   };
 };
 
@@ -77,6 +94,10 @@ export const useRegionStyles = (region: any, options: Partial<StyleOptions> = {}
   const { suggestion } = useContext(ImageViewContext) ?? {};
   const [highlighted, setHighlighted] = useState(region.highlighted);
   const [shouldFill, setShouldFill] = useState(region.fill ?? (options.useStrokeAsFill || options.includeFill));
+  // Read through region.isProposal rather than from this state, but kept in
+  // the memo deps so accepting a proposal repaints the box immediately
+  // instead of on the next unrelated re-render.
+  const [origin, setOrigin] = useState(region.origin);
 
   const styles = useMemo(() => {
     return getRegionStyles({
@@ -87,10 +108,10 @@ export const useRegionStyles = (region: any, options: Partial<StyleOptions> = {}
       region,
       suggestion,
     });
-  }, [region, suggestion, options, highlighted, shouldFill]);
+  }, [region, suggestion, options, highlighted, shouldFill, origin]);
 
   useEffect(() => {
-    const disposeObserver = ["highlighted", "fill"].map((prop) => {
+    const disposeObserver = ["highlighted", "fill", "origin"].map((prop) => {
       try {
         return observe(
           region,
@@ -101,6 +122,8 @@ export const useRegionStyles = (region: any, options: Partial<StyleOptions> = {}
                 return setHighlighted(newValue);
               case "fill":
                 return setShouldFill(newValue);
+              case "origin":
+                return setOrigin(newValue);
             }
           },
           true,

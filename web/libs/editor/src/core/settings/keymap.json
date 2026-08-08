@@ -134,6 +134,10 @@
     "key": "backspace",
     "description": "Delete selected region"
   },
+  "region:accept": {
+    "key": "a",
+    "description": "Accept selected pre-annotated region"
+  },
   "region:cycle": {
     "key": "alt+.",
     "description": "Cycle through regions"

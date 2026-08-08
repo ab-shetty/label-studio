@@ -58,6 +58,19 @@ const RegionsMixin = types
       return !self.isDrawing;
     },
 
+    /**
+     * A region a machine put here that a human has not vouched for yet.
+     *
+     * `prediction-changed` counts as unaccepted on purpose. Dragging a
+     * proposal onto the product fixes its geometry, but these proposals are
+     * named by a shelf tag read separately from the box, so a correct box can
+     * still carry the wrong SKU. Acceptance has to be its own deliberate act,
+     * not a side effect of nudging a corner.
+     */
+    get isProposal() {
+      return self.origin === "prediction" || self.origin === "prediction-changed";
+    },
+
     get highlighted() {
       return self._highlighted;
     },
@@ -245,6 +258,18 @@ const RegionsMixin = types
       updateOriginOnEdit() {
         if (self.origin === "prediction") {
           self.origin = "prediction-changed";
+        }
+      },
+
+      /**
+       * Take ownership of a proposal: it stops being machine-provenanced and
+       * renders like any region the person drew themselves. Rejecting one
+       * needs no counterpart here -- a proposal is an ordinary editable
+       * region, so the normal delete already removes it.
+       */
+      acceptProposal() {
+        if (self.isProposal) {
+          self.origin = "manual";
         }
       },
 

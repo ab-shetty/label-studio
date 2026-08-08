@@ -543,14 +543,31 @@ const RegionControls: FC<RegionControlsProps> = injector(
       item.setLocked((locked: boolean) => !locked);
     }, []);
 
+    // Clicking the sparks accepts the proposal it marks. The icon was already
+    // the "a machine made this" badge, so the thing you want to act on and the
+    // thing you click are the same target -- and it gives the `a` hotkey a
+    // visible home for anyone who never reads a shortcut list.
+    const onAcceptProposal = useCallback(
+      (e: MouseEvent) => {
+        e.stopPropagation();
+        item.acceptProposal();
+      },
+      [item],
+    );
+
     return (
       <div
         className={cn("outliner-item").elem("controls").mod({ withControls: hasControls, newUI: true }).toClassName()}
       >
-        <Tooltip title={"Confidence Score"}>
+        <Tooltip title={item?.isProposal ? "Pre-annotated — click to accept (a)" : "Confidence Score"}>
           <div className={cn("outliner-item").elem("control-wrapper").toClassName()}>
             <div className={cn("outliner-item").elem("control").mod({ type: "predict" }).toClassName()}>
-              {item?.origin === "prediction" && <IconSparks style={{ width: 18, height: 18 }} />}
+              {item?.isProposal && (
+                <IconSparks
+                  style={{ width: 18, height: 18, color: "#f5a623", cursor: "pointer" }}
+                  onClick={onAcceptProposal}
+                />
+              )}
             </div>
             <div className={cn("outliner-item").elem("control").mod({ type: "score" }).toClassName()}>
               {isDefined(item?.score) && item.score.toFixed(2)}

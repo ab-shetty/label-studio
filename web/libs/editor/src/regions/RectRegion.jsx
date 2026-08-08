@@ -509,7 +509,7 @@ const HtxRectangleView = ({ item, setShapeRef }) => {
         perfectDrawEnabled={false}
         shadowForStrokeEnabled={false}
         shadowBlur={0}
-        dash={suggestion ? [10, 10] : null}
+        dash={suggestion ? [10, 10] : (regionStyles.dash ?? null)}
         scaleX={item.scaleX}
         scaleY={item.scaleY}
         opacity={1}

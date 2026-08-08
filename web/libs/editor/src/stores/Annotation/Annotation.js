@@ -536,6 +536,13 @@ const _Annotation = types
       }
     },
 
+    /** Counterpart to deleteSelectedRegions: keep the proposal instead. */
+    acceptSelectedProposals() {
+      for (const region of self.selectedRegions) {
+        region.acceptProposal?.();
+      }
+    },
+
     unselectStates() {
       self.names.forEach((tag) => tag.unselectAll?.());
     },

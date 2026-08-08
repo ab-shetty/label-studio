@@ -327,6 +327,12 @@ const Result = types
   .actions((self) => ({
     setValue(value) {
       self.value[self.from_name.valueType] = value;
+      // Correcting the SKU on a pre-annotated region is an edit just as much
+      // as dragging its corner is. Without this the region still reports
+      // itself as untouched machine output, and anything downstream that
+      // treats untouched proposals as disposable -- the bulk proposal script
+      // replaces them on every run -- would throw the correction away.
+      self.area?.updateOriginOnEdit?.();
     },
 
     afterCreate() {
