@@ -327,12 +327,20 @@ const Result = types
   .actions((self) => ({
     setValue(value) {
       self.value[self.from_name.valueType] = value;
-      // Correcting the SKU on a pre-annotated region is an edit just as much
-      // as dragging its corner is. Without this the region still reports
-      // itself as untouched machine output, and anything downstream that
-      // treats untouched proposals as disposable -- the bulk proposal script
-      // replaces them on every run -- would throw the correction away.
-      self.area?.updateOriginOnEdit?.();
+
+      // Naming a region is the act of vouching for it. A proposal's box comes
+      // from the detector, but its SKU comes from OCR'ing a shelf tag read
+      // separately from the box -- the name is the part actually in doubt, so
+      // a person setting it has answered the question the amber was asking.
+      //
+      // Moving a corner makes no such claim: it fixes geometry and says
+      // nothing about whether the tag named the right product, so that still
+      // only demotes `prediction` to `prediction-changed`.
+      if (self.from_name.valueType === "taxonomy") {
+        self.area?.acceptProposal?.();
+      } else {
+        self.area?.updateOriginOnEdit?.();
+      }
     },
 
     afterCreate() {

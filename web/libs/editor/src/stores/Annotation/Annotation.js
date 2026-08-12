@@ -12,6 +12,7 @@ import Result from "../../regions/Result";
 import Utils from "../../utils";
 import { FF_DEV_1284, FF_DEV_3391, FF_LSDV_4583, FF_REVIEWER_FLOW, isFF } from "../../utils/feature-flags";
 import { delay, isDefined } from "../../utils/utilities";
+import InfoModal from "../../components/Infomodal/Infomodal";
 import { CommentStore } from "../Comment/CommentStore";
 import RegionStore from "../RegionStore";
 import RelationStore from "../RelationStore";
@@ -607,8 +608,35 @@ const _Annotation = types
         }
       });
 
+      if (ok !== false && !self.validateProposalsAccepted()) return false;
+
       // should be true or false
       return ok ?? true;
+    },
+
+    /**
+     * Nothing leaves this screen still wearing amber.
+     *
+     * Once an annotation is saved, an unaccepted proposal is indistinguishable
+     * from human work to everything downstream -- the export reads boxes, not
+     * their provenance -- so the only place the distinction can still be
+     * enforced is here, on the way out. Runs on Update as well as Submit,
+     * since both go through validate(). Drafts autosave without validating,
+     * which is what we want: leaving a task half-reviewed is fine, calling it
+     * finished is not.
+     */
+    validateProposalsAccepted() {
+      const pending = self.regions.filter((r) => r.isProposal);
+
+      if (!pending.length) return true;
+
+      self.selectArea(pending[0]);
+      InfoModal.warning(
+        `${pending.length} pre-annotated ${pending.length === 1 ? "region is" : "regions are"} still unaccepted. ` +
+          "Check the selected one, then press 'a' to accept it or backspace to reject it.",
+      );
+
+      return false;
     },
 
     traverseTree(cb) {
