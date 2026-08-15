@@ -11,6 +11,7 @@ from data_manager.actions import DataManagerAction
 from data_manager.functions import evaluate_predictions
 from django.conf import settings
 from projects.models import Project
+from rest_framework.exceptions import ValidationError
 from tasks.functions import update_tasks_counters
 from tasks.models import Annotation, AnnotationDraft, Prediction, Task
 from users.models import User
@@ -91,6 +92,40 @@ def _parse_detection_floor(raw):
     return value
 
 
+def _align_project_model_version(project, queryset):
+    """Point the project at the model version its predictions actually carry.
+
+    The labeling UI filters predictions by project.model_version (see
+    tasks/serializers.py TaskWithAnnotationsAndPredictionsAndDraftsSerializer.
+    get_predictions -- the ff_front_dev_1682 flag is off here, so the plain
+    `filter(model_version=project.model_version)` branch runs). Attaching an ML
+    backend sets that field to the backend's *title*, normally "default", while
+    the predictions the backend returns carry its real version string
+    ("rfdetr-nano-<run>-236cls+cascade+box+tpl"). Those two never match, so a
+    run could create every prediction correctly and still open on a blank image
+    -- no error anywhere, because nothing failed.
+
+    Re-checked on every run rather than pinned once, because that version string
+    encodes which stages are enabled: switching pre-annotation framework in this
+    very dialog changes it, so any value written once at attach time is
+    guaranteed to go stale.
+    """
+    latest = (
+        Prediction.objects.filter(task__in=queryset)
+        .order_by('-created_at')
+        .values_list('model_version', flat=True)
+        .first()
+    )
+    if latest and project.model_version != latest:
+        logger.info(
+            f'project={project.id} model_version {project.model_version!r} -> {latest!r} '
+            f'so the predictions just retrieved are actually visible'
+        )
+        project.model_version = latest
+        project.save(update_fields=['model_version'])
+    return latest
+
+
 def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     """Retrieve predictions by tasks ids
 
@@ -103,6 +138,21 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
         the context, so the backend falls back to its env defaults rather than
         to a second copy of the policy living here.
     """
+    # evaluate_predictions() returns silently when the project has no ML backend
+    # attached, and this action then reported "Retrieved N predictions" for a run
+    # that called nothing at all. A project created while the RF-DETR backend was
+    # down lands in exactly that state: the Create Project wizard's addMLBackend
+    # call fails, the project is created anyway, and every later pre-annotation
+    # run is a no-op that claims success.
+    if project.ml_backend is None:
+        raise ValidationError(
+            'No ML backend is connected to this project, so there is nothing to retrieve '
+            'predictions from. Attach one under Settings > Machine Learning. (New projects '
+            'normally get the RF-DETR backend attached automatically, but that step is '
+            'skipped without comment if the backend was unreachable at the moment the '
+            'project was created.)'
+        )
+
     context = {}
     framework = request.data.get('framework')
     if framework in RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES:
@@ -116,7 +166,21 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     if detection_floor is not None:
         context['detection_floor'] = detection_floor
     evaluate_predictions(queryset, context=context or None)
-    return {'processed_items': queryset.count(), 'detail': 'Retrieved ' + str(queryset.count()) + ' predictions'}
+
+    version = _align_project_model_version(project, queryset)
+    # Count what the run actually produced, not how many tasks were selected --
+    # the old message reported the selection size either way, which is what let a
+    # no-op run look like a success.
+    predicted = (
+        Prediction.objects.filter(task__in=queryset, model_version=version).values('task').distinct().count()
+        if version
+        else 0
+    )
+    selected = queryset.count()
+    detail = f'Retrieved predictions for {predicted} of {selected} tasks'
+    if predicted < selected:
+        detail += ' — the rest returned nothing; check the ML backend log'
+    return {'processed_items': predicted, 'detail': detail}
 
 
 def delete_tasks(project, queryset, **kwargs):

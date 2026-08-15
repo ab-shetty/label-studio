@@ -200,7 +200,23 @@ export const CreateProject = ({ onClose }) => {
 
     const defaultMlBackendUrl = window.APP_SETTINGS?.default_ml_backend_url;
     if (defaultMlBackendUrl) {
-      await api.callApi("addMLBackend", { body: { url: defaultMlBackendUrl, project: response.id } });
+      // LS refuses to attach a backend it cannot reach, so this fails whenever the
+      // RF-DETR process happens to be down at create time. Left unreported, the
+      // project is still created and looks fine -- until "Retrieve Predictions"
+      // does nothing at all, with no clue as to why. Say so here instead.
+      const ml = await api.callApi("addMLBackend", {
+        body: { url: defaultMlBackendUrl, project: response.id },
+        errorFilter: () => true,
+      });
+
+      if (!ml || ml.error) {
+        setWaitingStatus(false);
+        alert(
+          `The project was created, but the RF-DETR ML backend at ${defaultMlBackendUrl} could not be ` +
+            "attached — it is probably not running. Pre-annotation will do nothing until you attach it " +
+            "under Settings > Machine Learning.",
+        );
+      }
     }
 
     if (sample) await uploadSample(sample);
