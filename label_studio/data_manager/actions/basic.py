@@ -28,10 +28,22 @@ logger = logging.getLogger(__name__)
 # context={'cascade_mode': ...} down to the backend's predict() call, which
 # falls back to its env-var defaults when no override is given (e.g. the
 # automatic retrieve-on-task-open path never sets this).
+# Each option is (cascade_mode, propose_boxes, name_proposals). None means
+# "leave it to the backend's env default", so the recommended entry follows
+# whatever session_start.sh configured rather than pinning a second copy of the
+# policy here.
+#
+# The old list named only cascade modes, which stopped being the whole story
+# once box proposals and template naming existed: picking "plain RF-DETR" still
+# produced proposed boxes and template-guessed names, so the label was simply
+# untrue. It also gave shelf-tag correction equal billing with the recommended
+# path after that measured worse in every run (see pipeline_dryrun.py).
 RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES = {
-    'Plain (RF-DETR only, no cascade)': 'off',
-    'Cascade (+ GPT-5-mini verification)': 'cascade',
-    'Cascade + Shelf-tag correction': 'cascade_shelf_tags',
+    'Recommended (as configured for this session)': (None, None, None),
+    'Boxes only -- no SKU guesses': (None, True, False),
+    'Cascade only -- no proposed boxes': ('cascade', False, False),
+    'Plain RF-DETR -- no cascade, no proposals': ('off', False, False),
+    'Shelf-tag correction (measured worse; for comparison)': ('cascade_shelf_tags', None, None),
 }
 
 
@@ -86,12 +98,20 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     :param queryset: filtered tasks db queryset
     :param request: originating request; may carry 'framework' and
         'detection_floor' fields (see retrieve_tasks_predictions_form) selecting
-        which RF-DETR cascade mode and detection cutoff to use for this run
+        which parts of the pre-annotation pipeline to run and what detection
+        cutoff to use. Anything the chosen option leaves as None is omitted from
+        the context, so the backend falls back to its env defaults rather than
+        to a second copy of the policy living here.
     """
     context = {}
     framework = request.data.get('framework')
     if framework in RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES:
-        context['cascade_mode'] = RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES[framework]
+        cascade_mode, propose_boxes, name_proposals = RETRIEVE_PREDICTIONS_FRAMEWORK_CHOICES[framework]
+        for key, value in (('cascade_mode', cascade_mode),
+                           ('propose_boxes', propose_boxes),
+                           ('name_proposals', name_proposals)):
+            if value is not None:
+                context[key] = value
     detection_floor = _parse_detection_floor(request.data.get('detection_floor'))
     if detection_floor is not None:
         context['detection_floor'] = detection_floor
