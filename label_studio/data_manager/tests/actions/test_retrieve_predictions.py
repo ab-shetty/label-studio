@@ -122,6 +122,22 @@ class TestRetrievePredictionsModelVersion(TestCase):
         assert result['processed_items'] == 0
         assert 'of 2 tasks' in result['detail']
 
+    def test_pre_existing_predictions_are_not_counted_as_this_run_s_work(self):
+        """The "Recommended" option sends an empty context, which makes
+        predict_tasks skip tasks that already carry a prediction at the current
+        model_version. Counting rows by version alone reported those skipped
+        tasks as freshly predicted -- a no-op run reading as a complete one."""
+        with mock.patch('data_manager.actions.basic.evaluate_predictions', self._fake_evaluate):
+            first = retrieve_tasks_predictions(self.project, Task.objects.all(), request=_request())
+        assert first['processed_items'] == 2
+
+        # Second run predicts nothing, exactly as a real skip would.
+        with mock.patch('data_manager.actions.basic.evaluate_predictions', lambda qs, context=None: None):
+            second = retrieve_tasks_predictions(self.project, Task.objects.all(), request=_request())
+
+        assert second['processed_items'] == 0
+        assert 'already had predictions' in second['detail']
+
 
 class TestDetectionFloorParsing(TestCase):
     """A blank "detection floor" field must never reach the backend as a real 0.

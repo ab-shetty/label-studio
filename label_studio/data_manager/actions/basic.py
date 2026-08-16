@@ -10,6 +10,7 @@ from core.utils.common import load_func
 from data_manager.actions import DataManagerAction
 from data_manager.functions import evaluate_predictions
 from django.conf import settings
+from django.utils import timezone
 from projects.models import Project
 from rest_framework.exceptions import ValidationError
 from tasks.functions import update_tasks_counters
@@ -180,22 +181,29 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     detection_floor = _parse_detection_floor(request.data.get('detection_floor'))
     if detection_floor is not None:
         context['detection_floor'] = detection_floor
+    started_at = timezone.now()
     evaluate_predictions(queryset, context=context or None)
 
     version = _align_project_model_version(project, queryset)
-    # Count what the run actually produced, not how many tasks were selected --
-    # the old message reported the selection size either way, which is what let a
-    # no-op run look like a success.
-    predicted = (
-        Prediction.objects.filter(task__in=queryset, model_version=version).values('task').distinct().count()
-        if version
-        else 0
-    )
+    # Count what THIS run produced, not what the tasks happen to have. An empty
+    # context (the "Recommended" option, whose values are all None) makes
+    # MLBackend.predict_tasks skip tasks that already carry a prediction at the
+    # current model_version -- so a re-run can legitimately call the model for
+    # nothing. Counting rows by version alone reported those pre-existing
+    # predictions as this run's work, which is the same lie in a smaller font.
+    fresh = existing = 0
+    if version:
+        by_version = Prediction.objects.filter(task__in=queryset, model_version=version)
+        fresh = by_version.filter(created_at__gte=started_at).values('task').distinct().count()
+        existing = by_version.filter(created_at__lt=started_at).values('task').distinct().count()
+
     selected = queryset.count()
-    detail = f'Retrieved predictions for {predicted} of {selected} tasks'
-    if predicted < selected:
-        detail += ' — the rest returned nothing; check the ML backend log'
-    return {'processed_items': predicted, 'detail': detail}
+    parts = [f'Predicted {fresh} of {selected} tasks']
+    if existing:
+        parts.append(f'{existing} already had predictions from this model and were skipped')
+    if fresh + existing < selected:
+        parts.append(f'{selected - fresh - existing} returned nothing — check the ML backend log')
+    return {'processed_items': fresh, 'detail': '; '.join(parts)}
 
 
 def delete_tasks(project, queryset, **kwargs):
