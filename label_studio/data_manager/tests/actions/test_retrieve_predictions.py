@@ -7,7 +7,7 @@ the other called it correctly and then hid the result.
 """
 from unittest import mock
 
-from data_manager.actions.basic import retrieve_tasks_predictions
+from data_manager.actions.basic import _parse_detection_floor, retrieve_tasks_predictions
 from django.http import HttpRequest
 from django.test import TestCase
 from ml.models import MLBackend
@@ -121,3 +121,33 @@ class TestRetrievePredictionsModelVersion(TestCase):
 
         assert result['processed_items'] == 0
         assert 'of 2 tasks' in result['detail']
+
+
+class TestDetectionFloorParsing(TestCase):
+    """A blank "detection floor" field must never reach the backend as a real 0.
+
+    The Data Manager form serialises number inputs with Number(field.value), and
+    Number("") is 0 -- so an untouched optional field submitted a hard floor of
+    zero. That accepts every near-zero-confidence detection and pushes each one
+    through the verification cascade: 156s/image against 6.5s, an 8-hour run that
+    the 1-hour request timeout kills with nothing saved.
+    """
+
+    def test_blank_is_not_a_floor(self):
+        assert _parse_detection_floor('') is None
+        assert _parse_detection_floor(None) is None
+
+    def test_zero_is_treated_as_blank(self):
+        assert _parse_detection_floor(0) is None
+        assert _parse_detection_floor('0') is None
+        assert _parse_detection_floor(0.0) is None
+
+    def test_a_real_floor_survives(self):
+        assert _parse_detection_floor(0.2) == 0.2
+        assert _parse_detection_floor('0.05') == 0.05
+        assert _parse_detection_floor(1) == 1
+
+    def test_junk_and_out_of_range_fall_back_to_the_default(self):
+        assert _parse_detection_floor('abc') is None
+        assert _parse_detection_floor(1.5) is None
+        assert _parse_detection_floor(-1) is None

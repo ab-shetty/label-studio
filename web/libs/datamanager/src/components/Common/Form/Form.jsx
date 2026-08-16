@@ -189,7 +189,14 @@ export default class Form extends Component {
             return inputValue;
           }
           if (["number", "range"].includes(fieldType)) {
-            return Number(field.value);
+            // Number("") is 0, so an untouched optional number field used to submit
+            // a real, meaningful zero. On "Retrieve Predictions" that turned a blank
+            // "detection floor (blank = configured default)" into a floor of ZERO --
+            // every near-zero-confidence detection accepted and pushed through the
+            // verification cascade, which took a 24-minute run to 8 hours. null is
+            // the value this reducer already understands as "omit me" (see the
+            // skipEmpty check below).
+            return field.value === "" ? null : Number(field.value);
           }
 
           return inputValue;

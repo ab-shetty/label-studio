@@ -89,6 +89,21 @@ def _parse_detection_floor(raw):
     if not 0 <= value <= 1:
         logger.warning(f'Ignoring out-of-range detection_floor: {value}')
         return None
+    if value == 0:
+        # Defence in depth against an older Data Manager bundle, where an
+        # untouched number input submitted Number("") === 0 rather than nothing --
+        # so "blank = configured default" silently meant "floor of zero". A zero
+        # floor accepts every near-zero-confidence query the detector emits and
+        # feeds them all through the verification cascade: measured at 156s/image
+        # against 6.5s, i.e. an 8-hour run that dies on the 1-hour timeout having
+        # saved nothing. Nobody wants this on purpose, and the form cannot tell it
+        # apart from blank, so blank wins.
+        logger.warning(
+            'Ignoring detection_floor=0 and using the configured default: a zero floor '
+            'disables filtering entirely, and an empty form field is indistinguishable '
+            'from a deliberate zero. Set CASCADE_FLOOR on the ML backend to go lower.'
+        )
+        return None
     return value
 
 
