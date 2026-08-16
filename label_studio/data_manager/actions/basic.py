@@ -7,6 +7,7 @@ from core.feature_flags import flag_set
 from core.permissions import AllPermissions
 from core.redis import start_job_async_or_sync
 from core.utils.common import load_func
+from core.utils.params import get_env
 from data_manager.actions import DataManagerAction
 from data_manager.functions import evaluate_predictions
 from django.conf import settings
@@ -108,6 +109,41 @@ def _parse_detection_floor(raw):
     return value
 
 
+def _predict_in_chunks(queryset, context):
+    """Predict in batches so a long run cannot lose everything at the end.
+
+    MLBackend.predict_tasks sends the whole selection to the ML backend as ONE
+    request and saves the predictions only after it returns, so the work is
+    all-or-nothing: a 178-image run measured at 14.6s/image takes ~43 minutes,
+    and any failure in minute 42 -- timeout, backend restart, dropped connection
+    -- discards all 178. That is not hypothetical; it is how the previous attempt
+    ended.
+
+    Chunking does NOT make a run faster. It bounds the blast radius: a failure
+    now costs at most one chunk. It also makes a run resumable, because
+    predict_tasks skips tasks that already carry a prediction at the current
+    model_version -- so re-running the same selection with the "Recommended"
+    option (the one that sends no context override) picks up where it stopped
+    rather than starting over.
+
+    Ordered by id so a resumed run covers the same tasks in the same order, and
+    a partial run is a prefix rather than an arbitrary subset.
+    """
+    chunk_size = int(get_env('RETRIEVE_PREDICTIONS_CHUNK_SIZE', 25))
+    ids = list(queryset.order_by('id').values_list('id', flat=True))
+    total = len(ids)
+    for start in range(0, total, chunk_size):
+        batch = ids[start:start + chunk_size]
+        logger.info(
+            f'retrieve_tasks_predictions: chunk {start // chunk_size + 1}'
+            f'/{(total + chunk_size - 1) // chunk_size} ({len(batch)} tasks, '
+            f'{start + len(batch)}/{total} of the selection)'
+        )
+        # A fresh queryset per chunk: evaluate_predictions reads tasks[0].project
+        # and predict_tasks re-filters, so it must be a queryset, not a slice.
+        evaluate_predictions(Task.objects.filter(id__in=batch), context=context)
+
+
 def _align_project_model_version(project, queryset):
     """Point the project at the model version its predictions actually carry.
 
@@ -182,7 +218,7 @@ def retrieve_tasks_predictions(project, queryset, request, **kwargs):
     if detection_floor is not None:
         context['detection_floor'] = detection_floor
     started_at = timezone.now()
-    evaluate_predictions(queryset, context=context or None)
+    _predict_in_chunks(queryset, context=context or None)
 
     version = _align_project_model_version(project, queryset)
     # Count what THIS run produced, not what the tasks happen to have. An empty

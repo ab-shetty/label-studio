@@ -167,3 +167,56 @@ class TestDetectionFloorParsing(TestCase):
         assert _parse_detection_floor('abc') is None
         assert _parse_detection_floor(1.5) is None
         assert _parse_detection_floor(-1) is None
+
+
+class TestChunking(TestCase):
+    """A long run must not be all-or-nothing.
+
+    predict_tasks sends the whole selection as one request and saves only after
+    it returns, so a failure in the last minute of a 43-minute run discarded all
+    178 images. Chunking bounds that to one chunk.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.project = ProjectFactory()
+        cls.tasks = [TaskFactory(project=cls.project) for _ in range(12)]
+
+    def setUp(self):
+        MLBackend.objects.create(project=self.project, url='http://testserver:9091', title='default')
+
+    def test_selection_is_split_into_chunks(self):
+        seen = []
+
+        def _record(queryset, context=None):
+            seen.append(sorted(queryset.values_list('id', flat=True)))
+
+        with mock.patch('data_manager.actions.basic.evaluate_predictions', _record):
+            with mock.patch('data_manager.actions.basic.get_env', return_value=5):
+                retrieve_tasks_predictions(self.project, Task.objects.all(), request=_request())
+
+        assert [len(batch) for batch in seen] == [5, 5, 2]
+        # every task exactly once, in id order, so a partial run is a prefix
+        flat = [task_id for batch in seen for task_id in batch]
+        assert flat == sorted(t.id for t in self.tasks)
+
+    def test_a_chunk_failing_keeps_earlier_chunks(self):
+        """The whole point: work completed before the failure survives it."""
+        calls = []
+
+        def _boom(queryset, context=None):
+            calls.append(1)
+            if len(calls) == 3:
+                raise TimeoutError('ML backend timed out')
+            for task in queryset:
+                Prediction.objects.create(
+                    task=task, project=self.project, model_version=MODEL_VERSION, result=[], score=0.5
+                )
+
+        with mock.patch('data_manager.actions.basic.evaluate_predictions', _boom):
+            with mock.patch('data_manager.actions.basic.get_env', return_value=5):
+                with self.assertRaises(TimeoutError):
+                    retrieve_tasks_predictions(self.project, Task.objects.all(), request=_request())
+
+        # first two chunks are on disk rather than discarded with the failure
+        assert Prediction.objects.count() == 10
