@@ -165,9 +165,6 @@ export class LSFWrapper {
       if (FF_DEV_2186 && this.project.review_settings?.require_comment_on_reject) {
         interfaces.push("comments:update");
       }
-      if (this.project.show_skip_button) {
-        interfaces.push("skip");
-      }
     } else {
       interfaces.push(
         "infobar",
@@ -178,6 +175,22 @@ export class LSFWrapper {
         "predictions:tabs",
         "annotations:copy-link",
       );
+    }
+
+    // Skip used to be pushed inside the labelStream branch only, so the button
+    // simply did not exist when a task was opened from the Data Manager grid --
+    // and the grid is how frames actually get labelled here, because you need
+    // its filters to find the ones worth doing. Skip is how an unusable frame
+    // (blurry, occluded) gets marked: export_batch.py drops any task whose
+    // annotations are all was_cancelled, and names them in its summary, so the
+    // frame never reaches the training set. That exclusion was already built and
+    // was unreachable from the one screen people label in.
+    //
+    // Safe on a pre-annotated task: skipTask() does not call validate(), so the
+    // unaccepted-proposal guard does not block it. You do not have to clear a
+    // dozen amber boxes to say an image is unusable.
+    if (this.project.show_skip_button) {
+      interfaces.push("skip");
     }
 
     if (this.datamanager.hasInterface("instruction")) {
