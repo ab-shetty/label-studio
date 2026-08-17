@@ -1541,7 +1541,10 @@ class ProjectSummary(models.Model):
                 from_name = result['from_name']
 
                 # aggregate labels
-                if from_name not in self.created_labels:
+                # Same as update_created_labels_drafts: test the accumulator,
+                # not the stored field, or a rebuild from an empty summary
+                # re-initialises on every result and keeps only the last.
+                if from_name not in labels:
                     labels[from_name] = dict()
 
                 for label in self._get_labels(result):
@@ -1606,7 +1609,11 @@ class ProjectSummary(models.Model):
                 from_name = result['from_name']
 
                 # aggregate labels
-                if from_name not in self.created_labels_drafts:
+                # Test the accumulator, not the stored field: they diverge as
+                # soon as this loop adds a control the summary did not already
+                # have, and then every subsequent result re-initialises the
+                # bucket and only the last one survives.
+                if from_name not in labels:
                     labels[from_name] = dict()
 
                 for label in self._get_labels(result):

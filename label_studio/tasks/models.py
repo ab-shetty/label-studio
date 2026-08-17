@@ -1029,6 +1029,16 @@ class AnnotationDraft(FsmHistoryStateModel):
                 from projects.models import ProjectSummary
 
                 ProjectSummary.objects.select_for_update().filter(pk=project.summary.pk).first()
+                # update_created_labels_drafts only ADDS. On a re-save that
+                # counted the draft's regions a second time, and drafts autosave
+                # continuously while labelling, so created_labels_drafts drifted
+                # upward for as long as anyone kept working -- measured 5x on a
+                # single project. Subtract what this row currently says before
+                # adding what it is about to say.
+                if self.pk:
+                    previous = AnnotationDraft.objects.filter(pk=self.pk).first()
+                    if previous is not None:
+                        project.summary.remove_created_drafts_and_labels([previous])
             super().save(*args, **kwargs)
             if hasattr(project, 'summary'):
                 project.summary.update_created_labels_drafts([self])
