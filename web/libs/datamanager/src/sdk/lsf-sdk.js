@@ -218,10 +218,15 @@ export class LSFWrapper {
       interfaces = this.interfacesModifier(interfaces, this.labelStream);
     }
 
+    // Only prev/next depends on there being a stream to move through. Skip does
+    // not: shouldLoadNext() is false for every task opened from the Data Manager
+    // grid, so lumping "skip" in here silently undid the push above and the
+    // button stayed missing on the one screen frames are actually labelled from.
+    // onSkipTask already passes shouldLoadNext() as its own loadNext flag, so
+    // skipping outside a stream marks the task and simply does not advance --
+    // which is the wanted behaviour when you opened a single task on purpose.
     if (!this.shouldLoadNext()) {
-      interfaces = interfaces.filter((item) => {
-        return !["topbar:prevnext", "skip"].includes(item);
-      });
+      interfaces = interfaces.filter((item) => item !== "topbar:prevnext");
     }
 
     const queueTotal = dm.store.project.reviewer_queue_total || dm.store.project.queue_total;
